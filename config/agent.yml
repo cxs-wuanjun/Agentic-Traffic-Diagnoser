@@ -1,0 +1,3 @@
+# TransAI 交通智能分析助手配置
+# 知识库文档目录（初始交通知识文档）
+knowledge_data_path: data/traffic_knowledge
