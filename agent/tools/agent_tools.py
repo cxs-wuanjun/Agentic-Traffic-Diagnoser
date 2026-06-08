@@ -128,7 +128,4 @@ def rag_query(query: str) -> str:
     return rag.rag_summarize(query)
 
 
-@tool(description="触发交通诊断报告生成模式。当用户明确要求生成诊断报告、分析报告、事件报告时调用，无入参，调用后系统切换到报告生成专用提示词")
-def activate_report_mode() -> str:
-    """激活报告生成模式，触发动态提示词切换"""
-    return "报告生成模式已激活"
+

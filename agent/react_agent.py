@@ -5,7 +5,7 @@ from model.factory import chat_model
 from utils.prompt_loader import load_system_prompts
 from agent.tools.agent_tools import (
     rag_query, get_realtime_traffic,
-    get_road_status, get_current_time, activate_report_mode
+    get_road_status, get_current_time
 )
 from agent.tools.sql_tool import analyze_historical_traffic_sql
 from agent.tools.middleware import monitor_tool, log_before_model, report_prompt_switch
@@ -21,7 +21,6 @@ _ALL_TOOLS = [
     analyze_historical_traffic_sql,
     get_road_status,
     get_current_time,
-    activate_report_mode,
 ]
 
 

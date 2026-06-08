@@ -6,40 +6,29 @@ dependencies: matplotlib, datetime
 
 # 数据可视化 (Data Visualization) 技能手册
 
-当任务需要你绘制“拥堵延时指数”或“交通流量”趋势图时，请严格根据你在上下文中**已经查到的真实数据**，在你的最终回答中输出一段 Python 代码（包裹在 ```python 和 ``` 之间）。
+当任务需要你绘制“拥堵延时指数”或“交通流量”趋势图时，请严格根据你在上下文中**已经查到的真实数据**，在你的最终回答中输出一段 Python 代码（包裹在 ```python 和 ``` 之间），调用我们封装好的图表引擎。
 
 ## 绘图要求
-1. 使用 `matplotlib.pyplot`。
-2. 必须设置中文字体：`plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'Arial']`。
-3. 请使用 `plt.plot()` 绘制带有 marker 的折线图，并用 `plt.fill_between()` 在下方填充颜色。
-4. 图片**必须**保存到当前目录的 `outputs/reports/chart.png`。
-5. 必须在代码末尾显式 `plt.close()`。
+1. 你必须调用预置的画图引擎：`agent.skills.data-visualization.scripts.plot_chart.draw_trend_chart`
+2. 将你查找到的数据以 list 形式传入 `dates` 和 `values` 参数。
+3. 引擎会自动保存图片并返回路径。
 
 ## 代码范例
 
 ```python
-import os
-import matplotlib.pyplot as plt
+from agent.skills.getattr('data-visualization', 'scripts.plot_chart').draw_trend_chart import draw_trend_chart
+# 或者直接：
+import sys
+sys.path.append('.')
+from agent.skills.getattr("data-visualization").scripts.plot_chart import draw_trend_chart # 为了避免 - 报错，最好用下面安全导入方式
 
-plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'Arial']
-plt.rcParams['axes.unicode_minus'] = False
+import importlib
+plot_chart = importlib.import_module("agent.skills.data-visualization.scripts.plot_chart")
 
-# 请将这里的 dates 和 values 替换为你查到的真实数据
+# 请替换为你查到的真实数据
 dates = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 values = [1.5, 1.8, 2.1, 1.9, 2.5, 1.2, 1.3]
 
-plt.figure(figsize=(8, 4))
-plt.plot(dates, values, marker='o', color='#d32f2f', linewidth=2.5)
-plt.fill_between(dates, values, color='#ef5350', alpha=0.2)
-plt.title("交通趋势分析")
-plt.xlabel("日期")
-plt.ylabel("数值")
-plt.grid(True, linestyle='--', alpha=0.5)
-
-out_dir = os.path.join(os.getcwd(), "outputs", "reports")
-os.makedirs(out_dir, exist_ok=True)
-plt.tight_layout()
-plt.savefig(os.path.join(out_dir, "chart.png"), dpi=150)
-plt.close()
-print(f"图表已生成: {os.path.join(out_dir, 'chart.png')}")
+chart_path = plot_chart.draw_trend_chart(dates=dates, values=values, title="历史交通趋势分析")
+print(f"图表已生成: {chart_path}")
 ```

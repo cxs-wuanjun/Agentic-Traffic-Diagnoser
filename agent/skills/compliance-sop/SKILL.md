@@ -4,21 +4,21 @@ description: 根据交通异常类型读取内置 SOP 预案库，约束报告�
 dependencies: json
 ---
 
-# 交通处置建议 SOP Skill
+# 合规预案 (Compliance SOP) 技能手册
 
-本 Skill 用于约束交通诊断报告中的“处置建议”部分。处置建议指针对当前交通异常给出的可执行管理动作，例如拥堵疏导、事故处置、施工管控、诱导发布和后续监测。
+在撰写最终报告的“处置建议”环节，你不能自行编造建议，必须严格引用官方预案库中的原文。
 
-## 数据来源
+## 操作指南
+请调用我们封装好的预案检索模块，传入当前异常类型（例如“拥堵”、“事故”、“施工”），提取原文：
 
-当前技能包提供内置 SOP 预案库：
+```python
+import importlib
+search_sop = importlib.import_module("agent.skills.compliance-sop.scripts.search_sop")
 
-`agent/skills/compliance-sop/resources/database.json`
-
-该文件按异常类型映射处置预案，当前支持：
-
-- 拥堵
-- 事故
-- 施工
+# 根据诊断结果拉取预案
+sop_text = search_sop.fetch_sop("事故")
+print("找到预案:", sop_text)
+```
 
 ## 使用规则
 

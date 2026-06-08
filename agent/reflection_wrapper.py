@@ -20,30 +20,6 @@ def load_skill_md(skill_name: str) -> str:
     return ""
 
 
-REFLECTION_SYSTEM = """你是一名严格的交通诊断报告审查专家。你的任务是：
-1. 仔细阅读提供的交通诊断报告草稿
-2. 指出其中存在的问题，包括：
-   - 数据描述是否准确、具体（有无含糊或矛盾之处）
-   - 成因分析是否有理有据（有无凭空假设）
-   - 处置建议是否具体可执行（有无空泛描述）
-   - 报告格式是否规范完整
-3. 给出具体的修改意见（而非直接重写）
-
-如果报告已经足够完美，没有任何需要修改的地方，请在回复的开头明确写上『PASS』。
-用中文回复，直接列出问题和建议，格式简洁。"""
-
-REFINE_SYSTEM = """你是一名专业的交通诊断报告撰写专家。你将收到：
-1. 原始报告草稿
-2. 专家审查意见
-
-请根据审查意见，对报告进行改进，输出修订后的完整报告。
-改进要求：
-- 修正审查中指出的问题
-- 保持原有的规范格式（Markdown 格式）
-- 确保数据引用准确，分析有据可依
-- 建议必须具体、可执行
-
-直接输出修订后的完整报告，不要输出额外的解释。"""
 
 
 class TrafficReportReflector:
@@ -118,12 +94,11 @@ class TrafficReportReflector:
             # 审查报告
             review_messages = [
                 SystemMessage(
-                    content=REFLECTION_SYSTEM
-                    + "\n\n"
+                    content="你是一名严格的交通诊断报告审查专家。\n\n"
                     + skill_context
-                    + "\n\n【当前阶段：Review】请按报告工作流 Skill 的审查标准检查初稿。"
+                    + "\n\n【当前阶段：Review】请严格执行上面挂载的“报告生成工作流 Skill”中定义的【Review 阶段要求】来检查初稿。如果完全符合要求且无需修改，请在回复开头写上『PASS』。如果需要修改，请给出具体意见。"
                 ),
-                HumanMessage(content=f"请审查以下交通诊断报告：\n\n{current_report}"),
+                HumanMessage(content=f"请审查以下交通诊断报告初稿：\n\n{current_report}"),
             ]
             review_response = self.model.invoke(review_messages)
             review_feedback = review_response.content
@@ -138,10 +113,10 @@ class TrafficReportReflector:
             logger.info(f"[ReflectionReport] 第 {round_num + 1} 轮审查完成")
 
             system_prompt_content = (
-                REFINE_SYSTEM
-                + "\n\n"
+                "你是一名专业的交通诊断报告撰写专家。\n\n"
                 + skill_context
-                + "\n\n【当前阶段：Refine + Assemble】请输出修订后的完整 Markdown 报告，并在末尾提供可执行 Python 代码块。"
+                + "\n\n【当前阶段：Refine + Assemble】请严格执行“报告生成工作流 Skill”中定义的【Refine 阶段要求】与【Assemble 阶段要求】对初稿进行修订。\n\n"
+                + "请输出修订后的完整 Markdown 报告，并在最后提供生成Word和图表的可执行 Python 代码块。"
             )
                 
             refine_messages = [
