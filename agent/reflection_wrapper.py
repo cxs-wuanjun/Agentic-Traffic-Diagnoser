@@ -70,19 +70,18 @@ class TrafficReportReflector:
         """
         process_log = []
 
-        # 动态加载所有技能手册，以 "Progressive Disclosure (渐进式挂载)" 方式告诉大模型
+        # 动态加载报告工作流与配套技能手册，以 "Progressive Disclosure (渐进式挂载)" 方式告诉大模型
+        report_workflow_skill = load_skill_md("report-workflow")
         data_viz_skill = load_skill_md("data-visualization")
         docx_skill = load_skill_md("docx-assembler")
         sop_skill = load_skill_md("compliance-sop")
 
-        # 将这三大技能的说明书，直接外挂到大模型的 System Prompt 中
+        # 将报告生成全链路 Skill 与配套技能说明书外挂到大模型的 System Prompt 中
         skill_context = (
-            "【当前可用 Agent Skills】\n"
+            "【报告生成工作流 Skill】\n"
+            f"{report_workflow_skill}\n\n"
+            "【配套 Agent Skills】\n"
             f"{data_viz_skill}\n\n{sop_skill}\n\n{docx_skill}\n\n"
-            "【强制指令】\n"
-            "在你输出最终修改后的报告内容时，你必须在回答的最末尾，根据这些技能说明书的要求，"
-            "自行编写一段完整可运行的 Python 代码，将前面生成的分析文字和提取出的合规附件一起拼装成 docx。"
-            "代码请用 ```python 和 ``` 包裹。"
         )
 
         logger.info("[ReflectionReport] 技能手册已挂载，启动思考与撰写初稿...")
@@ -93,8 +92,15 @@ class TrafficReportReflector:
             f"请严格按照报告格式规范生成报告。对于每一处数据引用，请必须在其后添加数据溯源脚注标记，例如 '[1]根据高德实时数据'。"
         )
 
+        draft_system_prompt = (
+            self.report_system_prompt
+            + "\n\n"
+            + skill_context
+            + "\n\n【当前阶段：Draft】请生成报告初稿。初稿必须包含处置建议，但不要输出 Python 代码。"
+        )
+
         messages = [
-            SystemMessage(content=self.report_system_prompt),
+            SystemMessage(content=draft_system_prompt),
             HumanMessage(content=draft_prompt),
         ]
 
@@ -111,24 +117,32 @@ class TrafficReportReflector:
 
             # 审查报告
             review_messages = [
-                SystemMessage(content=REFLECTION_SYSTEM),
+                SystemMessage(
+                    content=REFLECTION_SYSTEM
+                    + "\n\n"
+                    + skill_context
+                    + "\n\n【当前阶段：Review】请按报告工作流 Skill 的审查标准检查初稿。"
+                ),
                 HumanMessage(content=f"请审查以下交通诊断报告：\n\n{current_report}"),
             ]
             review_response = self.model.invoke(review_messages)
             review_feedback = review_response.content
             
+            review_passed = review_feedback.strip().startswith("PASS")
             if review_feedback.strip().startswith("PASS"):
                 process_log.append(f"🔍 第 {round_num + 2} 步：专家审查通过，无须修改。")
-                logger.info(f"[ReflectionReport] 审查通过，提前结束迭代")
-                break
+                logger.info(f"[ReflectionReport] 审查通过，转入最终装配阶段")
+                review_feedback = "审查通过。请保持原报告结论不变，仅按报告工作流 Skill 补充最终报告所需的图表生成与 Word 装配代码。"
                 
             process_log.append(f"🔍 第 {round_num + 2} 步：审查意见 → {review_feedback[:80]}...")
             logger.info(f"[ReflectionReport] 第 {round_num + 1} 轮审查完成")
 
-            # 最后一轮加上强制的 Skill 代码生成要求
-            system_prompt_content = REFINE_SYSTEM
-            if round_num == self.max_rounds - 1:
-                system_prompt_content += "\n\n" + skill_context
+            system_prompt_content = (
+                REFINE_SYSTEM
+                + "\n\n"
+                + skill_context
+                + "\n\n【当前阶段：Refine + Assemble】请输出修订后的完整 Markdown 报告，并在末尾提供可执行 Python 代码块。"
+            )
                 
             refine_messages = [
                 SystemMessage(content=system_prompt_content),
@@ -144,6 +158,9 @@ class TrafficReportReflector:
             current_report = refine_response.content
             process_log.append(f"✨ 第 {round_num + 2} 步：报告已根据审查意见优化")
             logger.info(f"[ReflectionReport] 第 {round_num + 1} 轮优化完成")
+
+            if review_passed:
+                break
 
         process_log.append(f"📋 共完成 {self.max_rounds} 轮文本反思迭代，核心分析已就绪。")
         
