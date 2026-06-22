@@ -49,6 +49,31 @@ agent/skills/
 
 ## 🚀 快速启动 (Quick Start)
 
+### 中文交通知识库
+
+当前知识库包含 22 份可检索中文文档、639 个分片和 639 个 1024 维向量。官方 PDF/DOCX 原件保存在 `data/traffic_knowledge/source_files/`，由 DOCX 机械抽取的 UTF-8 TXT 用于向量化；来源与校验信息见 `data/traffic_knowledge/SOURCES.md` 和 `corpus_manifest.json`。
+
+重新下载官方中文语料：
+
+```bash
+python utils/traffic_corpus_builder.py
+```
+
+只查看文档解析和切片过程，不调用嵌入模型：
+
+```bash
+python -m rag.kb_builder --dry-run
+```
+
+正式构建；网络中断后可用 `--resume` 从已完成批次继续：
+
+```bash
+python -m rag.kb_builder
+python -m rag.kb_builder --resume --batch-size 8
+```
+
+构建过程会生成逐文档统计、全量切片、向量批次和检索验收报告，保存在 `outputs/kb_build/`。Streamlit 侧边栏的「知识库构建过程」也可以实时查看相同流水线并下载中间结果。
+
 ### 1. 克隆代码
 ```bash
 git clone https://github.com/cxs-wuanjun/Agentic-Traffic-Diagnoser.git

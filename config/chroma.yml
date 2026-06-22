@@ -1,8 +1,8 @@
-collection_name : traffic_agent
-persist_directory : chroma_db
+collection_name : traffic_agent_v2
+persist_directory : chroma_db_v2
 k :  3
 data_path : data/traffic_knowledge
-md5_hex_store : md5.txt
+md5_hex_store : md5_v2.txt
 allow_knowledge_file_type : ["txt","pdf"]
 
 chunk_size : 400

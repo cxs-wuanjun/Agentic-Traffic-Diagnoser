@@ -3,9 +3,11 @@ TransAI 交通智能分析助手
 Streamlit 主入口：流式对话 + 侧边栏追踪 + 知识库文档上传
 """
 import os
+import json
 import time
 import tempfile
 import uuid
+from pathlib import Path
 
 import streamlit as st
 from agent.react_agent import ReactAgent
@@ -13,6 +15,7 @@ from agent.trace_store import get_trace_store
 from rag.rag_service import RagSummarizeService
 from rag.vector_store import VectorStoreService
 from agent.history_manager import HistoryManager
+from rag.kb_builder import KnowledgeBaseBuilder
 
 # ──────────────────────── 页面基础配置 ────────────────────────
 st.set_page_config(
@@ -115,6 +118,129 @@ with st.sidebar:
                         st.warning(msg)
                 except Exception as e:
                     st.error(f"导入失败: {str(e)}")
+
+    # ── 可观察知识库构建 ──
+    with st.expander("🧱 知识库构建过程", expanded=False):
+        st.caption("展示文档解析、切片、向量化、Chroma 写入和检索验收的完整过程")
+        resume_kb_build = st.checkbox(
+            "从上次中断处继续",
+            value=True,
+            help="已完成批次会直接跳过；取消勾选会清空 v2 构建目录后重新开始。",
+        )
+
+        if st.button("🔄 重建中文交通知识库", use_container_width=True, key="rebuild_kb"):
+            progress_bar = st.progress(0.0, text="准备构建...")
+            build_status = st.status("正在构建知识库", expanded=True)
+            event_rows = []
+
+            def on_build_event(event):
+                progress_bar.progress(
+                    event["progress"],
+                    text=f"{event['stage']} · {event['message']}",
+                )
+                event_rows.append(event)
+                build_status.write(
+                    f"`{event['time']}` **{event['stage']}** — {event['message']}"
+                )
+
+            try:
+                builder = KnowledgeBaseBuilder(
+                    persist_directory="chroma_db_v2",
+                    collection_name="traffic_agent_v2",
+                    batch_size=16,
+                )
+                report = builder.build(callback=on_build_event, resume=resume_kb_build)
+                st.session_state["kb_build_report"] = report
+                build_status.update(
+                    label=(
+                        f"构建完成：{report['total_documents']} 份文档，"
+                        f"{report['stored_count']} 个向量"
+                    ),
+                    state="complete",
+                    expanded=True,
+                )
+                st.success("知识库已构建完成；重新启动应用后使用新集合。")
+            except Exception as e:
+                build_status.update(label="知识库构建失败", state="error", expanded=True)
+                st.error(f"构建失败：{e}")
+
+        latest_report_path = Path(__file__).resolve().parent / "outputs" / "kb_build" / "latest_report.json"
+        latest_report = st.session_state.get("kb_build_report")
+        if latest_report is None and latest_report_path.exists():
+            try:
+                latest_report = json.loads(latest_report_path.read_text(encoding="utf-8"))
+            except Exception:
+                latest_report = None
+
+        if latest_report:
+            st.markdown("**最近一次构建结果**")
+            col_doc, col_chunk = st.columns(2)
+            col_doc.metric("文档", latest_report["total_documents"])
+            col_chunk.metric("分片", latest_report["total_chunks"])
+            col_vec, col_dim = st.columns(2)
+            col_vec.metric("向量", latest_report["stored_count"])
+            col_dim.metric("维度", latest_report["vector_dimension"] or "—")
+
+            document_rows = [
+                {
+                    "文件": item["filename"],
+                    "字符": item["characters"],
+                    "分片": item["chunks"],
+                    "状态": item["status"],
+                }
+                for item in latest_report.get("documents", [])
+            ]
+            if document_rows:
+                st.markdown("**文档解析与切片结果**")
+                st.dataframe(document_rows, hide_index=True, use_container_width=True)
+
+            batch_rows = [
+                {
+                    "批次": item["batch"],
+                    "条数": item["items"],
+                    "维度": item["dimension"],
+                    "耗时ms": item["elapsed_ms"],
+                    "断点跳过": item.get("skipped", False),
+                }
+                for item in latest_report.get("embedding_batches", [])
+            ]
+            if batch_rows:
+                st.markdown("**向量化批次结果**")
+                st.dataframe(batch_rows, hide_index=True, use_container_width=True)
+
+            retrieval_checks = latest_report.get("retrieval_checks", [])
+            if retrieval_checks:
+                st.markdown("**检索验收结果**")
+                for check in retrieval_checks:
+                    st.markdown(f"**查询：{check['query']}**")
+                    for index, hit in enumerate(check.get("hits", []), start=1):
+                        st.caption(
+                            f"{index}. {hit.get('filename')} · "
+                            f"chunk {hit.get('chunk_index')} · "
+                            f"distance {hit.get('distance', 0):.4f}\n\n"
+                            f"{hit.get('preview', '')}"
+                        )
+
+            with latest_report_path.open("rb") as report_file:
+                st.download_button(
+                    "⬇️ 下载完整构建报告",
+                    data=report_file.read(),
+                    file_name="traffic_kb_build_report.json",
+                    mime="application/json",
+                    use_container_width=True,
+                )
+
+            chunks_rel = latest_report.get("artifacts", {}).get("chunks")
+            chunks_path = Path(__file__).resolve().parent / chunks_rel if chunks_rel else None
+            if chunks_path and chunks_path.exists():
+                with chunks_path.open("rb") as chunks_file:
+                    st.download_button(
+                        "⬇️ 下载全量切片 JSONL",
+                        data=chunks_file.read(),
+                        file_name="traffic_kb_chunks.jsonl",
+                        mime="application/x-ndjson",
+                        use_container_width=True,
+                    )
 
     st.divider()
 

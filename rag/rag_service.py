@@ -91,8 +91,21 @@ class RagSummarizeService(object):
         if self.enable_rewrite:
             search_query = self._rewrite_query(query)
             
-        # 粗排召回
-        docs = self.retriever.invoke(search_query)
+        # 混合粗排：语义向量召回 + 中文关键词召回。
+        vector_docs = self.retriever.invoke(search_query)
+        keyword_docs = self.vector_store.keyword_search(query, k=10)
+
+        docs = []
+        seen = set()
+        for doc in keyword_docs + vector_docs:
+            identity = (
+                doc.metadata.get("source"),
+                doc.metadata.get("chunk_index"),
+                doc.page_content,
+            )
+            if identity not in seen:
+                docs.append(doc)
+                seen.add(identity)
         
         # 精排重排
         if self.enable_rerank and len(docs) > 5:

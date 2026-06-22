@@ -2,7 +2,7 @@ import os,hashlib
 from utils.logger_handler import logger
 
 from langchain_core.documents import Document
-from langchain_community.document_loaders import PDFPlumberLoader, TextLoader
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
 
 def get_file_md5_hex(filepath:str):         # 获取文件的md5的十六进制字符串
     if not os.path.exists(filepath):
@@ -37,8 +37,8 @@ def listdir_with_allowed_type(path:str,allowed_types:tuple[str]):   # 返回文�
     return tuple(files)
 
 def pdf_loader(filepath:str,passwd=None)->list[Document]:
-    # 使用轻量级 PDFPlumber 替代 PyPDFLoader，对双栏和表格提取支持更好
-    return PDFPlumberLoader(filepath, password=passwd).load()
+    # requirements.txt 已声明 pypdf；统一使用 PyPDFLoader，避免依赖未声明的 pdfplumber。
+    return PyPDFLoader(filepath, password=passwd).load()
 
 def txt_loader(filepath:str)->list[Document]:
 

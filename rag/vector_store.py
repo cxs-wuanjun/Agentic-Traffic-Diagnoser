@@ -10,6 +10,7 @@ from utils.file_handler import pdf_loader, txt_loader, listdir_with_allowed_type
 from utils.logger_handler import logger
 
 import os
+import re
 
 
 class VectorStoreService:
@@ -26,11 +27,60 @@ class VectorStoreService:
             separators=chroma_conf["separators"],
             length_function=len,
         )
+        self._keyword_corpus = None
 
     def get_retriever(self, search_kwargs=None):
         if search_kwargs is None:
             search_kwargs = {"k": chroma_conf["k"]}
         return self.vector_store.as_retriever(search_kwargs=search_kwargs)
+
+    @staticmethod
+    def _keyword_terms(query: str) -> tuple[str, set[str]]:
+        """为中文法规查询生成轻量关键词和 2~4 字符 n-gram。"""
+        normalized = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", query)
+        for phrase in ("有哪些", "是什么", "怎么办", "如何", "怎么", "请问", "要求", "规定", "相关"):
+            normalized = normalized.replace(phrase, "")
+        terms = {normalized} if len(normalized) >= 2 else set()
+        ignored = {"安全", "管理", "规定", "要求", "如何", "相关", "交通", "道路"}
+        for size in (4, 3, 2):
+            for index in range(max(0, len(normalized) - size + 1)):
+                term = normalized[index:index + size]
+                if term not in ignored:
+                    terms.add(term)
+        return normalized, terms
+
+    def keyword_search(self, query: str, k: int = 10) -> list[Document]:
+        """中文关键词召回，用于补足短查询和法规标题的纯向量召回盲区。"""
+        if self._keyword_corpus is None:
+            payload = self.vector_store._collection.get(include=["documents", "metadatas"])
+            self._keyword_corpus = list(zip(payload.get("documents") or [], payload.get("metadatas") or []))
+
+        core, terms = self._keyword_terms(query)
+        if not terms:
+            return []
+
+        scored = []
+        for content, metadata in self._keyword_corpus:
+            if not content:
+                continue
+            score = 0.0
+            if core and core in content:
+                score += 200 + len(core) * 10
+            title_line = content.splitlines()[0] if content else ""
+            for term in terms:
+                occurrences = content.count(term)
+                if occurrences:
+                    score += occurrences * (len(term) ** 2)
+                    if term in title_line:
+                        score += len(term) ** 2 * 4
+            if score > 0:
+                scored.append((score, content, metadata or {}))
+
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [
+            Document(page_content=content, metadata={**metadata, "keyword_score": score})
+            for score, content, metadata in scored[:k]
+        ]
 
     def load_document(self):
         """
@@ -94,6 +144,7 @@ class VectorStoreService:
 
                 # 将内容存入向量库
                 self.vector_store.add_documents(split_document)
+                self._keyword_corpus = None
 
                 # 记录这个已经处理好的文件的md5，避免下次重复加载
                 save_md5_hex(md5_hex)
@@ -153,6 +204,7 @@ class VectorStoreService:
                 return False, "文档分片后内容为空"
 
             self.vector_store.add_documents(split_docs)
+            self._keyword_corpus = None
             save_md5_hex(md5_hex)
 
             import os as _os
@@ -177,5 +229,4 @@ if __name__ == '__main__':
     for r in res:
         print(r.page_content)
         print("-"*20)
-
 

@@ -40,6 +40,11 @@ logs/
 # Runtime generated data
 # =========================
 chroma_db/
+chroma_db*/
+outputs/
+
+# 可由 utils/traffic_corpus_builder.py 重新下载的官方 PDF/DOCX 原件
+data/traffic_knowledge/source_files/
 
 # Optional: if you later generate temp reports locally
 tmp/
